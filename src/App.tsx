@@ -66,10 +66,13 @@ function App() {
     readRecentFiles(),
   )
   const [workspace, setWorkspace] = useState<WorkspaceFolder | null>(() =>
-    readWorkspace(),
+    readInitialWorkspace(),
   )
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
-  const [status, setStatus] = useState('Local draft')
+  const [status, setStatus] = useState(() => {
+    const initialWorkspace = readInitialWorkspace()
+    return initialWorkspace ? `Workspace ${initialWorkspace.name}` : 'Local draft'
+  })
   const fallbackInputRef = useRef<HTMLInputElement | null>(null)
   const paletteInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -304,7 +307,10 @@ function App() {
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier) return
 
-      if (event.key.toLowerCase() === 's') {
+      if (event.key.toLowerCase() === 's' && event.shiftKey) {
+        event.preventDefault()
+        void onSaveAs()
+      } else if (event.key.toLowerCase() === 's') {
         event.preventDefault()
         void onSave()
       }
@@ -314,7 +320,7 @@ function App() {
         openPalette()
       }
 
-      if (event.key.toLowerCase() === 'o') {
+      if (event.key.toLowerCase() === 'o' && !event.shiftKey) {
         event.preventDefault()
         void onOpen()
       }
@@ -322,7 +328,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onOpen, onSave, openPalette])
+  }, [onOpen, onSave, onSaveAs, openPalette])
 
   useEffect(() => {
     if (!isPaletteOpen) return
@@ -584,6 +590,26 @@ function readWorkspace(): WorkspaceFolder | null {
     }
 
     return parsed
+  } catch {
+    return null
+  }
+}
+
+function readInitialWorkspace(): WorkspaceFolder | null {
+  return readLaunchWorkspace() ?? readWorkspace()
+}
+
+function readLaunchWorkspace(): WorkspaceFolder | null {
+  try {
+    const workspacePath = new URLSearchParams(window.location.search).get(
+      'workspacePath',
+    )
+    if (!workspacePath) return null
+
+    return {
+      name: getPathName(workspacePath),
+      path: workspacePath,
+    }
   } catch {
     return null
   }
