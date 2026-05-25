@@ -758,11 +758,11 @@ function getUpdateHeadline(state: NativeUpdateState | null) {
   if (!state.isPackaged) return 'Available in packaged builds'
   if (state.status === 'checking') return 'Checking GitHub releases'
   if (state.status === 'available' && state.availableVersion) {
-    return `Version ${state.availableVersion} is available`
+    return `Version ${state.availableVersion} is downloading`
   }
   if (state.status === 'downloading') return `Downloading ${state.progress ?? 0}%`
   if (state.status === 'downloaded' && state.downloadedVersion) {
-    return `Version ${state.downloadedVersion} is ready to install`
+    return `Version ${state.downloadedVersion} is ready. Install now or restart Slate.`
   }
   if (state.status === 'not-available') return 'Slate is up to date'
   if (state.status === 'error') return 'Update check failed'

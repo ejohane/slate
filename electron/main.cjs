@@ -49,8 +49,8 @@ let updateState = {
 }
 
 app.setName('Slate')
-autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = false
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
 autoUpdater.setFeedURL({
   provider: 'github',
   owner: githubOwner,
@@ -619,7 +619,7 @@ function notifyUpdateAvailable(version) {
 
   new Notification({
     title: 'Slate update available',
-    body: `Version ${version} is ready to download.`,
+    body: `Version ${version} is downloading. Install it from Slate or restart the app when it is ready.`,
   }).show()
 }
 
