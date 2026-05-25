@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('nativeMarkdown', {
     ipcRenderer.invoke('workspace:listMarkdownFiles', folderPath),
   setDocumentState: (payload) =>
     ipcRenderer.invoke('window:set-document-state', payload),
+  setThemeSource: (themeSource) =>
+    ipcRenderer.invoke('theme:set-source', themeSource),
   onMenuCommand: (callback) => {
     const listener = (_event, command) => callback(command)
     ipcRenderer.on('menu-command', listener)
