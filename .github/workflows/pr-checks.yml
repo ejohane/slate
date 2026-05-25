@@ -48,13 +48,7 @@ jobs:
         run: npm run lint
 
       - name: Run tests
-        shell: bash
-        run: |
-          if npm pkg get scripts.test | grep -qv '^{}$\|^null$'; then
-            npm test
-          else
-            echo "::notice::No npm test script is configured yet."
-          fi
+        run: node .github/scripts/run-optional-test.mjs
 
       - name: Run build
         run: npm run build
