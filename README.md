@@ -28,6 +28,19 @@ npm run build
 npm run start
 ```
 
+## Package and release
+
+```sh
+npm run package
+npm run dist -- --publish never
+```
+
+Merges to `main` run `.github/workflows/publish-desktop.yml`. The workflow treats `package.json` as the release source of truth, validates that its `version` is SemVer, builds macOS, Windows, and Linux installers, and publishes the files to a GitHub Release tagged as `v<version>`, for example `v0.2.0`.
+
+Every published release needs a new SemVer in `package.json`. If the matching tag or GitHub Release already exists, CI fails instead of overwriting it.
+
+The desktop app checks `ejohane/slate` GitHub Releases on startup and from Help -> Check for Updates. Auto-download is disabled; the Downloads panel lets you check, download, and install a new version from inside Slate.
+
 ## Core shape
 
 - `src/components/HybridMarkdownEditor.tsx` provides the clean hybrid document surface.

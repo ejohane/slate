@@ -9,6 +9,16 @@ contextBridge.exposeInMainWorld('nativeMarkdown', {
     ipcRenderer.invoke('workspace:listMarkdownFiles', folderPath),
   setDocumentState: (payload) =>
     ipcRenderer.invoke('window:set-document-state', payload),
+  getUpdateState: () => ipcRenderer.invoke('updates:get-state'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
+  openLatestRelease: () => ipcRenderer.invoke('updates:open-release-page'),
+  onUpdateState: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('updates:state', listener)
+    return () => ipcRenderer.removeListener('updates:state', listener)
+  },
   onMenuCommand: (callback) => {
     const listener = (_event, command) => callback(command)
     ipcRenderer.on('menu-command', listener)

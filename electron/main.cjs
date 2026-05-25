@@ -1,8 +1,21 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } = require('electron')
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  Notification,
+  shell,
+} = require('electron')
+const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 
 const devServerUrl = process.env.ELECTRON_START_URL
+const githubOwner = 'ejohane'
+const githubRepo = 'slate'
+const releasePageUrl = `https://github.com/${githubOwner}/${githubRepo}/releases/latest`
 const markdownExtensions = new Set(['.md', '.markdown', '.mdown', '.mkd'])
 const excludedWorkspaceDirectories = new Set([
   '.cache',
@@ -24,8 +37,25 @@ const excludedWorkspaceDirectories = new Set([
 const maxWorkspaceFiles = 5000
 
 let mainWindow = null
+let updateState = {
+  currentVersion: app.getVersion(),
+  isPackaged: app.isPackaged,
+  status: 'idle',
+  availableVersion: null,
+  downloadedVersion: null,
+  progress: null,
+  error: null,
+  releasePageUrl,
+}
 
 app.setName('Slate')
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = false
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: githubOwner,
+  repo: githubRepo,
+})
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -73,6 +103,10 @@ function createMenu() {
             label: app.name,
             submenu: [
               { role: 'about' },
+              {
+                label: 'Check for Updates...',
+                click: () => sendMenuCommand('updates'),
+              },
               { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
@@ -142,6 +176,19 @@ function createMenu() {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Check for Updates...',
+          click: () => sendMenuCommand('updates'),
+        },
+        {
+          label: 'Open Downloads Page',
+          click: () => shell.openExternal(releasePageUrl),
+        },
       ],
     },
     {
@@ -247,9 +294,24 @@ ipcMain.handle('window:set-document-state', (event, { edited, filePath, title })
   }
 })
 
+ipcMain.handle('updates:get-state', () => getUpdateState())
+
+ipcMain.handle('updates:check', () => checkForUpdates({ manual: true }))
+
+ipcMain.handle('updates:download', () => downloadUpdate())
+
+ipcMain.handle('updates:install', () => installUpdate())
+
+ipcMain.handle('updates:open-release-page', () => shell.openExternal(releasePageUrl))
+
 app.whenReady().then(() => {
   createMenu()
   createWindow()
+  configureUpdaterEvents()
+
+  setTimeout(() => {
+    void checkForUpdates({ manual: false })
+  }, 3500)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -324,4 +386,163 @@ async function listMarkdownFiles(folderPath) {
 
   await visit(folderPath)
   return files
+}
+
+function configureUpdaterEvents() {
+  autoUpdater.on('checking-for-update', () => {
+    setUpdateState({
+      status: 'checking',
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    setUpdateState({
+      status: 'available',
+      availableVersion: info.version,
+      downloadedVersion: null,
+      progress: null,
+      error: null,
+    })
+    notifyUpdateAvailable(info.version)
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    setUpdateState({
+      status: 'not-available',
+      availableVersion: null,
+      downloadedVersion: null,
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    setUpdateState({
+      status: 'downloading',
+      progress: Math.round(progress.percent),
+      error: null,
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    setUpdateState({
+      status: 'downloaded',
+      downloadedVersion: info.version,
+      availableVersion: info.version,
+      progress: 100,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('error', (error) => {
+    setUpdateState({
+      status: 'error',
+      progress: null,
+      error: getErrorMessage(error),
+    })
+  })
+}
+
+function getUpdateState() {
+  return {
+    ...updateState,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+  }
+}
+
+function setUpdateState(patch) {
+  updateState = {
+    ...updateState,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    ...patch,
+  }
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('updates:state', getUpdateState())
+  }
+}
+
+async function checkForUpdates({ manual }) {
+  if (!app.isPackaged) {
+    setUpdateState({
+      status: 'idle',
+      progress: null,
+      error: manual ? 'Update checks run in packaged builds.' : null,
+    })
+    return getUpdateState()
+  }
+
+  try {
+    setUpdateState({
+      status: 'checking',
+      progress: null,
+      error: null,
+    })
+    await autoUpdater.checkForUpdates()
+  } catch (error) {
+    setUpdateState({
+      status: 'error',
+      progress: null,
+      error: getErrorMessage(error),
+    })
+  }
+
+  return getUpdateState()
+}
+
+async function downloadUpdate() {
+  if (!app.isPackaged) {
+    setUpdateState({
+      status: 'idle',
+      error: 'Update downloads run in packaged builds.',
+    })
+    return getUpdateState()
+  }
+
+  try {
+    setUpdateState({
+      status: 'downloading',
+      progress: 0,
+      error: null,
+    })
+    await autoUpdater.downloadUpdate()
+  } catch (error) {
+    setUpdateState({
+      status: 'error',
+      progress: null,
+      error: getErrorMessage(error),
+    })
+  }
+
+  return getUpdateState()
+}
+
+function installUpdate() {
+  if (updateState.status !== 'downloaded') {
+    setUpdateState({
+      error: 'Download an update before installing.',
+    })
+    return getUpdateState()
+  }
+
+  autoUpdater.quitAndInstall(false, true)
+  return getUpdateState()
+}
+
+function notifyUpdateAvailable(version) {
+  if (!Notification.isSupported()) return
+
+  new Notification({
+    title: 'Slate update available',
+    body: `Version ${version} is ready to download.`,
+  }).show()
+}
+
+function getErrorMessage(error) {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
