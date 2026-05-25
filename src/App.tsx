@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, FolderOpen, Monitor, Moon, PanelLeft, Search, Sun } from 'lucide-react'
+import {
+  Download,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  Monitor,
+  Moon,
+  PanelLeft,
+  RefreshCw,
+  RotateCw,
+  Search,
+  Sun,
+  X,
+} from 'lucide-react'
 import './App.css'
 import { HybridMarkdownEditor } from './components/HybridMarkdownEditor'
 import { countWords } from './core/markdownBlocks'
@@ -16,6 +29,7 @@ import {
   type WorkspaceFile,
   type WorkspaceFolder,
 } from './core/fileAccess'
+import type { NativeUpdateState } from './electron'
 
 type RecentMarkdownFile = {
   name: string
@@ -85,6 +99,8 @@ function App() {
     const initialWorkspace = readInitialWorkspace()
     return initialWorkspace ? `Workspace ${initialWorkspace.name}` : 'Local draft'
   })
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(false)
+  const [updateState, setUpdateState] = useState<NativeUpdateState | null>(null)
   const fallbackInputRef = useRef<HTMLInputElement | null>(null)
   const paletteInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -314,6 +330,34 @@ function App() {
     }
   }, [addRecentFile, file.name, markdown])
 
+  const openUpdates = useCallback(() => {
+    setIsUpdatesOpen(true)
+
+    if (!window.nativeMarkdown) return
+    void window.nativeMarkdown.checkForUpdates().then((nextState) => {
+      setUpdateState(nextState)
+      if (nextState.status === 'available' && nextState.availableVersion) {
+        setStatus(`Update ${nextState.availableVersion} available`)
+      }
+    })
+  }, [])
+
+  const onDownloadUpdate = useCallback(async () => {
+    if (!window.nativeMarkdown) return
+    const nextState = await window.nativeMarkdown.downloadUpdate()
+    setUpdateState(nextState)
+  }, [])
+
+  const onInstallUpdate = useCallback(() => {
+    if (!window.nativeMarkdown) return
+    void window.nativeMarkdown.installUpdate()
+  }, [])
+
+  const onOpenLatestRelease = useCallback(() => {
+    if (!window.nativeMarkdown) return
+    void window.nativeMarkdown.openLatestRelease()
+  }, [])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey
@@ -390,8 +434,12 @@ function App() {
       if (command === 'saveAs') {
         void onSaveAs()
       }
+
+      if (command === 'updates') {
+        openUpdates()
+      }
     })
-  }, [onChooseWorkspace, onOpen, onSave, onSaveAs, openPalette])
+  }, [onChooseWorkspace, onOpen, onSave, onSaveAs, openPalette, openUpdates])
 
   useEffect(() => {
     if (!window.nativeMarkdown) return
@@ -402,6 +450,23 @@ function App() {
       title: `${isDirty ? '• ' : ''}${file.name}`,
     })
   }, [file.name, file.path, isDirty])
+
+  useEffect(() => {
+    if (!window.nativeMarkdown) return
+
+    void window.nativeMarkdown.getUpdateState().then(setUpdateState)
+
+    return window.nativeMarkdown.onUpdateState((nextState) => {
+      setUpdateState(nextState)
+      if (nextState.status === 'available' && nextState.availableVersion) {
+        setStatus(`Update ${nextState.availableVersion} available`)
+      }
+
+      if (nextState.status === 'downloaded' && nextState.downloadedVersion) {
+        setStatus(`Update ${nextState.downloadedVersion} ready`)
+      }
+    })
+  }, [])
 
   return (
     <main className="app-shell" data-nav-open={isNavOpen}>
@@ -457,6 +522,17 @@ function App() {
         <span>{status}</span>
         <span>{wordCount} words</span>
         <span>{markdown.length} chars</span>
+        {window.nativeMarkdown ? (
+          <button
+            type="button"
+            className={`statusbar-update ${updateState?.status ?? 'idle'}`}
+            onClick={openUpdates}
+            title="Updates"
+          >
+            <Download aria-hidden="true" size={12} strokeWidth={1.9} />
+            <span>{getUpdateButtonLabel(updateState)}</span>
+          </button>
+        ) : null}
         <div className="theme-switcher" aria-label="Theme mode">
           {themeOptions.map(({ value, label, Icon }) => (
             <button
@@ -586,8 +662,111 @@ function App() {
           </section>
         </div>
       ) : null}
+
+      {isUpdatesOpen ? (
+        <div className="update-backdrop" onMouseDown={() => setIsUpdatesOpen(false)}>
+          <section
+            className="update-panel"
+            aria-label="Downloads"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="update-panel-header">
+              <div>
+                <h2>Downloads</h2>
+                <p>{getUpdateHeadline(updateState)}</p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close downloads"
+                onClick={() => setIsUpdatesOpen(false)}
+              >
+                <X aria-hidden="true" size={18} strokeWidth={1.8} />
+              </button>
+            </header>
+
+            <dl className="update-meta">
+              <div>
+                <dt>Installed</dt>
+                <dd>{updateState?.currentVersion ?? 'development'}</dd>
+              </div>
+              <div>
+                <dt>Latest</dt>
+                <dd>{updateState?.availableVersion ?? updateState?.downloadedVersion ?? '-'}</dd>
+              </div>
+            </dl>
+
+            {updateState?.status === 'downloading' ? (
+              <div className="update-progress" aria-label="Download progress">
+                <span style={{ width: `${updateState.progress ?? 0}%` }} />
+              </div>
+            ) : null}
+
+            {updateState?.error ? (
+              <p className="update-error">{updateState.error}</p>
+            ) : null}
+
+            <div className="update-actions">
+              <button
+                type="button"
+                onClick={openUpdates}
+                disabled={updateState?.status === 'checking' || updateState?.status === 'downloading'}
+              >
+                <RefreshCw aria-hidden="true" size={16} strokeWidth={1.8} />
+                <span>Check</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDownloadUpdate()}
+                disabled={updateState?.status !== 'available'}
+              >
+                <Download aria-hidden="true" size={16} strokeWidth={1.8} />
+                <span>Download</span>
+              </button>
+              <button
+                type="button"
+                onClick={onInstallUpdate}
+                disabled={updateState?.status !== 'downloaded'}
+              >
+                <RotateCw aria-hidden="true" size={16} strokeWidth={1.8} />
+                <span>Install</span>
+              </button>
+              <button type="button" onClick={onOpenLatestRelease}>
+                <ExternalLink aria-hidden="true" size={16} strokeWidth={1.8} />
+                <span>Releases</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
+}
+
+function getUpdateButtonLabel(state: NativeUpdateState | null) {
+  if (!state) return 'Updates'
+  if (state.status === 'checking') return 'Checking'
+  if (state.status === 'available') return `v${state.availableVersion}`
+  if (state.status === 'downloading') return `${state.progress ?? 0}%`
+  if (state.status === 'downloaded') return 'Ready'
+  if (state.status === 'error') return 'Update error'
+  return 'Updates'
+}
+
+function getUpdateHeadline(state: NativeUpdateState | null) {
+  if (!state) return 'Checking release feed'
+  if (!state.isPackaged) return 'Available in packaged builds'
+  if (state.status === 'checking') return 'Checking GitHub releases'
+  if (state.status === 'available' && state.availableVersion) {
+    return `Version ${state.availableVersion} is available`
+  }
+  if (state.status === 'downloading') return `Downloading ${state.progress ?? 0}%`
+  if (state.status === 'downloaded' && state.downloadedVersion) {
+    return `Version ${state.downloadedVersion} is ready to install`
+  }
+  if (state.status === 'not-available') return 'Slate is up to date'
+  if (state.status === 'error') return 'Update check failed'
+  return 'No update check has run'
 }
 
 function readRecentFiles(): RecentMarkdownFile[] {

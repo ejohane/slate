@@ -1,7 +1,7 @@
 {
   "name": "slate",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -9,11 +9,64 @@
     "dev:web": "vite",
     "start": "electron .",
     "build": "tsc -b && vite build",
+    "package": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "author": "Erik Johansson",
+  "description": "A quiet desktop Markdown editor.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ejohane/slate.git"
+  },
+  "build": {
+    "appId": "com.ejohane.slate",
+    "productName": "Slate",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ejohane",
+        "repo": "slate"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Office",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  },
   "dependencies": {
     "dompurify": "^3.4.5",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.16.0",
     "markdown-it": "^14.1.1",
     "react": "^19.2.6",
@@ -28,6 +81,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
     "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

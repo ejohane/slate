@@ -4,6 +4,27 @@ export type NativeMenuCommand =
   | 'palette'
   | 'save'
   | 'saveAs'
+  | 'updates'
+
+export type NativeUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+export type NativeUpdateState = {
+  currentVersion: string
+  isPackaged: boolean
+  status: NativeUpdateStatus
+  availableVersion: string | null
+  downloadedVersion: string | null
+  progress: number | null
+  error: string | null
+  releasePageUrl: string
+}
 
 export type NativeWorkspaceFile = {
   name: string
@@ -53,6 +74,14 @@ declare global {
         filePath: string | null
         title: string
       }) => Promise<void>
+      getUpdateState: () => Promise<NativeUpdateState>
+      checkForUpdates: () => Promise<NativeUpdateState>
+      downloadUpdate: () => Promise<NativeUpdateState>
+      installUpdate: () => Promise<NativeUpdateState>
+      openLatestRelease: () => Promise<void>
+      onUpdateState: (
+        callback: (state: NativeUpdateState) => void,
+      ) => () => void
       setThemeSource: (themeSource: 'system' | 'light' | 'dark') => Promise<void>
       onMenuCommand: (
         callback: (command: NativeMenuCommand) => void,
