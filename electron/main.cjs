@@ -27,8 +27,8 @@ let mainWindow = null
 
 app.setName('Slate')
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+function createWindow(options = {}) {
+  const window = new BrowserWindow({
     width: 980,
     height: 760,
     minWidth: 640,
@@ -45,24 +45,78 @@ function createWindow() {
     },
   })
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
+  if (!mainWindow) {
+    mainWindow = window
+  }
+
+  window.once('ready-to-show', () => {
+    window.show()
   })
 
   if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl)
+    const url = new URL(devServerUrl)
+    if (options.workspacePath) {
+      url.searchParams.set('workspacePath', options.workspacePath)
+    }
+    window.loadURL(url.toString())
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    window.loadFile(path.join(__dirname, '../dist/index.html'), {
+      query: options.workspacePath ? { workspacePath: options.workspacePath } : {},
+    })
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = BrowserWindow.getAllWindows()[0] ?? null
+    }
   })
+
+  return window
 }
 
 function sendMenuCommand(command) {
   const window = BrowserWindow.getFocusedWindow() ?? mainWindow
   window?.webContents.send('menu-command', command)
+}
+
+function getDialogParentWindow(event) {
+  if (event) {
+    const eventWindow = BrowserWindow.fromWebContents(event.sender)
+    if (eventWindow) return eventWindow
+  }
+
+  return BrowserWindow.getFocusedWindow() ?? mainWindow
+}
+
+function showOpenDialog(parentWindow, options) {
+  return parentWindow
+    ? dialog.showOpenDialog(parentWindow, options)
+    : dialog.showOpenDialog(options)
+}
+
+function showSaveDialog(parentWindow, options) {
+  return parentWindow
+    ? dialog.showSaveDialog(parentWindow, options)
+    : dialog.showSaveDialog(options)
+}
+
+async function chooseWorkspaceFolders(parentWindow) {
+  const result = await showOpenDialog(parentWindow, {
+    properties: ['openDirectory', 'multiSelections'],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) return []
+  return result.filePaths
+}
+
+async function openWorkspaceWindowsFromDialog(parentWindow) {
+  const folderPaths = await chooseWorkspaceFolders(parentWindow)
+
+  for (const folderPath of folderPaths) {
+    createWindow({ workspacePath: folderPath })
+  }
+
+  return folderPaths.length
 }
 
 function createMenu() {
@@ -89,13 +143,25 @@ function createMenu() {
       label: 'File',
       submenu: [
         {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => createWindow(),
+        },
+        {
+          label: 'Open Folder...',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => {
+            void openWorkspaceWindowsFromDialog(BrowserWindow.getFocusedWindow() ?? mainWindow)
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Open...',
           accelerator: 'CmdOrCtrl+O',
           click: () => sendMenuCommand('open'),
         },
         {
-          label: 'Open Folder...',
-          accelerator: 'CmdOrCtrl+Shift+O',
+          label: 'Switch Folder in This Window...',
           click: () => sendMenuCommand('openFolder'),
         },
         { type: 'separator' },
@@ -156,9 +222,9 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-ipcMain.handle('file:open', async () => {
-  const window = BrowserWindow.getFocusedWindow() ?? mainWindow
-  const result = await dialog.showOpenDialog(window, {
+ipcMain.handle('file:open', async (event) => {
+  const window = getDialogParentWindow(event)
+  const result = await showOpenDialog(window, {
     properties: ['openFile'],
     filters: [
       { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'txt'] },
@@ -190,9 +256,9 @@ ipcMain.handle('file:openPath', async (_event, filePath) => {
   }
 })
 
-ipcMain.handle('workspace:chooseFolder', async () => {
-  const window = BrowserWindow.getFocusedWindow() ?? mainWindow
-  const result = await dialog.showOpenDialog(window, {
+ipcMain.handle('workspace:chooseFolder', async (event) => {
+  const window = getDialogParentWindow(event)
+  const result = await showOpenDialog(window, {
     properties: ['openDirectory'],
   })
 
@@ -206,17 +272,21 @@ ipcMain.handle('workspace:chooseFolder', async () => {
   }
 })
 
+ipcMain.handle('workspace:openFoldersInNewWindows', async (event) => {
+  return openWorkspaceWindowsFromDialog(getDialogParentWindow(event))
+})
+
 ipcMain.handle('workspace:listMarkdownFiles', async (_event, folderPath) => {
   if (!folderPath) return []
   return listMarkdownFiles(folderPath)
 })
 
-ipcMain.handle('file:save', async (_event, { filePath, suggestedName, text }) => {
+ipcMain.handle('file:save', async (event, { filePath, suggestedName, text }) => {
   let targetPath = filePath
-  const window = BrowserWindow.getFocusedWindow() ?? mainWindow
+  const window = getDialogParentWindow(event)
 
   if (!targetPath) {
-    const result = await dialog.showSaveDialog(window, {
+    const result = await showSaveDialog(window, {
       defaultPath: suggestedName || 'untitled.md',
       filters: [
         { name: 'Markdown', extensions: ['md', 'markdown'] },

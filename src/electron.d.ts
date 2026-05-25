@@ -44,6 +44,7 @@ declare global {
         payload: NativeSaveFilePayload,
       ) => Promise<NativeSaveFileResult>
       chooseWorkspaceFolder: () => Promise<NativeWorkspace | null>
+      openWorkspaceFoldersInNewWindows: () => Promise<number>
       listWorkspaceMarkdownFiles: (
         folderPath: string,
       ) => Promise<NativeWorkspaceFile[]>
