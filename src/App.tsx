@@ -4,10 +4,13 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Monitor,
+  Moon,
   PanelLeft,
   RefreshCw,
   RotateCw,
   Search,
+  Sun,
   X,
 } from 'lucide-react'
 import './App.css'
@@ -34,11 +37,20 @@ type RecentMarkdownFile = {
   touchedAt: number
 }
 
+type ThemePreference = 'system' | 'light' | 'dark'
+
 const legacyRecentFilesKey = 'personal-markdown-editor.recentFiles'
 const legacyWorkspaceKey = 'personal-markdown-editor.workspace'
 const recentFilesKey = 'slate.recentFiles'
 const workspaceKey = 'slate.workspace'
+const themeKey = 'slate.theme'
 const maxPaletteResults = 30
+
+const themeOptions = [
+  { value: 'system', label: 'Use system theme', Icon: Monitor },
+  { value: 'light', label: 'Use light theme', Icon: Sun },
+  { value: 'dark', label: 'Use dark theme', Icon: Moon },
+] as const
 
 const starterMarkdown = `# Friday notes
 
@@ -77,10 +89,16 @@ function App() {
     readRecentFiles(),
   )
   const [workspace, setWorkspace] = useState<WorkspaceFolder | null>(() =>
-    readWorkspace(),
+    readInitialWorkspace(),
   )
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
-  const [status, setStatus] = useState('Local draft')
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    readThemePreference(),
+  )
+  const [status, setStatus] = useState(() => {
+    const initialWorkspace = readInitialWorkspace()
+    return initialWorkspace ? `Workspace ${initialWorkspace.name}` : 'Local draft'
+  })
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false)
   const [updateState, setUpdateState] = useState<NativeUpdateState | null>(null)
   const fallbackInputRef = useRef<HTMLInputElement | null>(null)
@@ -345,7 +363,10 @@ function App() {
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier) return
 
-      if (event.key.toLowerCase() === 's') {
+      if (event.key.toLowerCase() === 's' && event.shiftKey) {
+        event.preventDefault()
+        void onSaveAs()
+      } else if (event.key.toLowerCase() === 's') {
         event.preventDefault()
         void onSave()
       }
@@ -355,7 +376,7 @@ function App() {
         openPalette()
       }
 
-      if (event.key.toLowerCase() === 'o') {
+      if (event.key.toLowerCase() === 'o' && !event.shiftKey) {
         event.preventDefault()
         void onOpen()
       }
@@ -363,7 +384,19 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onOpen, onSave, openPalette])
+  }, [onOpen, onSave, onSaveAs, openPalette])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themePreference
+    document.documentElement.style.colorScheme =
+      themePreference === 'dark'
+        ? 'dark'
+        : themePreference === 'light'
+          ? 'light'
+          : 'light dark'
+    writeThemePreference(themePreference)
+    void window.nativeMarkdown?.setThemeSource(themePreference)
+  }, [themePreference])
 
   useEffect(() => {
     if (!isPaletteOpen) return
@@ -500,6 +533,21 @@ function App() {
             <span>{getUpdateButtonLabel(updateState)}</span>
           </button>
         ) : null}
+        <div className="theme-switcher" aria-label="Theme mode">
+          {themeOptions.map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              className={themePreference === value ? 'active' : undefined}
+              aria-label={label}
+              aria-pressed={themePreference === value}
+              title={label}
+              onClick={() => setThemePreference(value)}
+            >
+              <Icon aria-hidden="true" size={14} strokeWidth={1.9} />
+            </button>
+          ))}
+        </div>
         <span>{canUseNativeFileSystem() ? 'native' : canUseFilePicker() ? 'browser' : 'download fallback'}</span>
       </footer>
 
@@ -765,8 +813,41 @@ function readWorkspace(): WorkspaceFolder | null {
   }
 }
 
+function readInitialWorkspace(): WorkspaceFolder | null {
+  return readLaunchWorkspace() ?? readWorkspace()
+}
+
+function readLaunchWorkspace(): WorkspaceFolder | null {
+  try {
+    const workspacePath = new URLSearchParams(window.location.search).get(
+      'workspacePath',
+    )
+    if (!workspacePath) return null
+
+    return {
+      name: getPathName(workspacePath),
+      path: workspacePath,
+    }
+  } catch {
+    return null
+  }
+}
+
 function writeWorkspace(workspace: WorkspaceFolder) {
   localStorage.setItem(workspaceKey, JSON.stringify(workspace))
+}
+
+function readThemePreference(): ThemePreference {
+  const stored = localStorage.getItem(themeKey)
+  if (stored === 'light' || stored === 'dark' || stored === 'system') {
+    return stored
+  }
+
+  return 'system'
+}
+
+function writeThemePreference(theme: ThemePreference) {
+  localStorage.setItem(themeKey, theme)
 }
 
 function getPathName(filePath: string) {

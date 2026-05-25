@@ -65,6 +65,7 @@ declare global {
         payload: NativeSaveFilePayload,
       ) => Promise<NativeSaveFileResult>
       chooseWorkspaceFolder: () => Promise<NativeWorkspace | null>
+      openWorkspaceFoldersInNewWindows: () => Promise<number>
       listWorkspaceMarkdownFiles: (
         folderPath: string,
       ) => Promise<NativeWorkspaceFile[]>
@@ -81,6 +82,7 @@ declare global {
       onUpdateState: (
         callback: (state: NativeUpdateState) => void,
       ) => () => void
+      setThemeSource: (themeSource: 'system' | 'light' | 'dark') => Promise<void>
       onMenuCommand: (
         callback: (command: NativeMenuCommand) => void,
       ) => () => void

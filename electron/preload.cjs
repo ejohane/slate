@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('nativeMarkdown', {
   openPath: (filePath) => ipcRenderer.invoke('file:openPath', filePath),
   saveFile: (payload) => ipcRenderer.invoke('file:save', payload),
   chooseWorkspaceFolder: () => ipcRenderer.invoke('workspace:chooseFolder'),
+  openWorkspaceFoldersInNewWindows: () =>
+    ipcRenderer.invoke('workspace:openFoldersInNewWindows'),
   listWorkspaceMarkdownFiles: (folderPath) =>
     ipcRenderer.invoke('workspace:listMarkdownFiles', folderPath),
   setDocumentState: (payload) =>
@@ -19,6 +21,8 @@ contextBridge.exposeInMainWorld('nativeMarkdown', {
     ipcRenderer.on('updates:state', listener)
     return () => ipcRenderer.removeListener('updates:state', listener)
   },
+  setThemeSource: (themeSource) =>
+    ipcRenderer.invoke('theme:set-source', themeSource),
   onMenuCommand: (callback) => {
     const listener = (_event, command) => callback(command)
     ipcRenderer.on('menu-command', listener)

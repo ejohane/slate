@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slate</title>
+    <script>
+      try {
+        const theme = localStorage.getItem('slate.theme')
+        if (theme === 'light' || theme === 'dark' || theme === 'system') {
+          document.documentElement.dataset.theme = theme
+        }
+      } catch {
+        document.documentElement.dataset.theme = 'system'
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
