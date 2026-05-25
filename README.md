@@ -8,6 +8,7 @@ Slate is a minimal, native-feeling Markdown editor built with Electron, Vite, Re
 - Native macOS-style window chrome with a hidden title bar.
 - Native File menu actions for Open, Save, and Save As.
 - Open and save real `.md` files directly from disk.
+- Open multiple workspace folders at once, with each selected folder in its own window.
 - Browser file API fallback when running the web build alone.
 - Plugin-shaped renderer extension point in `src/core/editorPlugins.ts`.
 

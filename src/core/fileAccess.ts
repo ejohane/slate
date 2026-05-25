@@ -107,6 +107,11 @@ export async function chooseWorkspaceFolder() {
   }
 }
 
+export async function openWorkspaceFoldersInNewWindows() {
+  if (!window.nativeMarkdown) return 0
+  return window.nativeMarkdown.openWorkspaceFoldersInNewWindows()
+}
+
 export async function listWorkspaceMarkdownFiles(folderPath: string) {
   if (!window.nativeMarkdown) return []
   return window.nativeMarkdown.listWorkspaceMarkdownFiles(folderPath)
