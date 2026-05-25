@@ -29,6 +29,7 @@
   --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 
   color: var(--ink);
+  color-scheme: light;
   background: var(--bg);
   font-family: var(--text);
   font-synthesis: none;
@@ -37,8 +38,42 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f0f0f;
+  --paper: #0b0b0b;
+  --sidebar: #202020;
+  --panel: #171717;
+  --control: #242424;
+  --hover: #303030;
+  --hover-soft: #2a2a2a;
+  --line: #303030;
+  --line-strong: #444444;
+  --window-border: #4a4a4a;
+  --focus: #ffffff;
+  --focus-soft: #777777;
+  --ink: #eeeeee;
+  --ink-strong: #ffffff;
+  --muted: #8b8b8b;
+  --muted-strong: #b3b3b3;
+  --source-bg: #000000;
+  --source-ink: #ffffff;
+  --save-dot: #ffffff;
+  --link: #ffffff;
+  --quote: #ffffff;
+  --code-bg: #202020;
+  --code-block: #151515;
+  --code-ink: #eeeeee;
+  --table-head: #111111;
+
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0f0f0f;
     --paper: #0b0b0b;
     --sidebar: #202020;
@@ -64,6 +99,8 @@
     --code-block: #151515;
     --code-ink: #eeeeee;
     --table-head: #111111;
+
+    color-scheme: dark;
   }
 }
 

@@ -247,6 +247,17 @@ ipcMain.handle('window:set-document-state', (event, { edited, filePath, title })
   }
 })
 
+ipcMain.handle('theme:set-source', (_event, themeSource) => {
+  if (!['system', 'light', 'dark'].includes(themeSource)) return
+
+  nativeTheme.themeSource = themeSource
+  const backgroundColor = nativeTheme.shouldUseDarkColors ? '#0b0b0b' : '#ffffff'
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.setBackgroundColor(backgroundColor)
+  }
+})
+
 app.whenReady().then(() => {
   createMenu()
   createWindow()

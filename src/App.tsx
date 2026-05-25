@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, FolderOpen, PanelLeft, Search } from 'lucide-react'
+import { FileText, FolderOpen, Monitor, Moon, PanelLeft, Search, Sun } from 'lucide-react'
 import './App.css'
 import { HybridMarkdownEditor } from './components/HybridMarkdownEditor'
 import { countWords } from './core/markdownBlocks'
@@ -23,11 +23,20 @@ type RecentMarkdownFile = {
   touchedAt: number
 }
 
+type ThemePreference = 'system' | 'light' | 'dark'
+
 const legacyRecentFilesKey = 'personal-markdown-editor.recentFiles'
 const legacyWorkspaceKey = 'personal-markdown-editor.workspace'
 const recentFilesKey = 'slate.recentFiles'
 const workspaceKey = 'slate.workspace'
+const themeKey = 'slate.theme'
 const maxPaletteResults = 30
+
+const themeOptions = [
+  { value: 'system', label: 'Use system theme', Icon: Monitor },
+  { value: 'light', label: 'Use light theme', Icon: Sun },
+  { value: 'dark', label: 'Use dark theme', Icon: Moon },
+] as const
 
 const starterMarkdown = `# Friday notes
 
@@ -69,6 +78,9 @@ function App() {
     readWorkspace(),
   )
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    readThemePreference(),
+  )
   const [status, setStatus] = useState('Local draft')
   const fallbackInputRef = useRef<HTMLInputElement | null>(null)
   const paletteInputRef = useRef<HTMLInputElement | null>(null)
@@ -325,6 +337,18 @@ function App() {
   }, [onOpen, onSave, openPalette])
 
   useEffect(() => {
+    document.documentElement.dataset.theme = themePreference
+    document.documentElement.style.colorScheme =
+      themePreference === 'dark'
+        ? 'dark'
+        : themePreference === 'light'
+          ? 'light'
+          : 'light dark'
+    writeThemePreference(themePreference)
+    void window.nativeMarkdown?.setThemeSource(themePreference)
+  }, [themePreference])
+
+  useEffect(() => {
     if (!isPaletteOpen) return
     paletteInputRef.current?.focus()
   }, [isPaletteOpen])
@@ -427,6 +451,21 @@ function App() {
         <span>{status}</span>
         <span>{wordCount} words</span>
         <span>{markdown.length} chars</span>
+        <div className="theme-switcher" aria-label="Theme mode">
+          {themeOptions.map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              className={themePreference === value ? 'active' : undefined}
+              aria-label={label}
+              aria-pressed={themePreference === value}
+              title={label}
+              onClick={() => setThemePreference(value)}
+            >
+              <Icon aria-hidden="true" size={14} strokeWidth={1.9} />
+            </button>
+          ))}
+        </div>
         <span>{canUseNativeFileSystem() ? 'native' : canUseFilePicker() ? 'browser' : 'download fallback'}</span>
       </footer>
 
@@ -591,6 +630,19 @@ function readWorkspace(): WorkspaceFolder | null {
 
 function writeWorkspace(workspace: WorkspaceFolder) {
   localStorage.setItem(workspaceKey, JSON.stringify(workspace))
+}
+
+function readThemePreference(): ThemePreference {
+  const stored = localStorage.getItem(themeKey)
+  if (stored === 'light' || stored === 'dark' || stored === 'system') {
+    return stored
+  }
+
+  return 'system'
+}
+
+function writeThemePreference(theme: ThemePreference) {
+  localStorage.setItem(themeKey, theme)
 }
 
 function getPathName(filePath: string) {

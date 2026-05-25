@@ -52,6 +52,7 @@ declare global {
         filePath: string | null
         title: string
       }) => Promise<void>
+      setThemeSource: (themeSource: 'system' | 'light' | 'dark') => Promise<void>
       onMenuCommand: (
         callback: (command: NativeMenuCommand) => void,
       ) => () => void
