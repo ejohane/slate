@@ -122,11 +122,21 @@ export function HybridMarkdownEditor({
         }
 
         if (block.kind === 'blank') {
+          const isCollapsedSeparator = shouldCollapseBlankSeparator(
+            blocks,
+            index,
+            safeActiveBlock?.index,
+          )
+
           return (
             <button
               key={`${index}-blank`}
               type="button"
-              className="markdown-blank-line"
+              className={`markdown-blank-line${
+                isCollapsedSeparator ? ' collapsed' : ''
+              }`}
+              tabIndex={isCollapsedSeparator ? -1 : undefined}
+              aria-hidden={isCollapsedSeparator}
               onClick={() => activateBlock(index)}
               aria-label="Blank line"
             />
@@ -269,6 +279,25 @@ function isSelectionOnFirstLine(textarea: HTMLTextAreaElement) {
 function isSelectionOnLastLine(textarea: HTMLTextAreaElement) {
   const afterSelection = textarea.value.slice(textarea.selectionEnd)
   return !afterSelection.includes('\n')
+}
+
+function shouldCollapseBlankSeparator(
+  blocks: ReturnType<typeof splitMarkdownBlocks>,
+  index: number,
+  activeIndex?: number,
+) {
+  if (index > 0 && blocks[index - 1].kind === 'blank') return false
+
+  const previousBlock = blocks[index - 1]
+  if (!previousBlock || previousBlock.kind === 'blank') return false
+
+  let nextIndex = index + 1
+  while (nextIndex < blocks.length && blocks[nextIndex].kind === 'blank') {
+    if (nextIndex === activeIndex) return true
+    nextIndex += 1
+  }
+
+  return nextIndex < blocks.length
 }
 
 const MarkdownRenderedBlock = memo(function MarkdownRenderedBlock({
