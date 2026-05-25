@@ -1,0 +1,60 @@
+name: PR checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  title:
+    name: Conventional PR title
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node .github/scripts/validate-pr-title.mjs
+
+  quality:
+    name: Lint, test, and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        shell: bash
+        run: |
+          if npm pkg get scripts.test | grep -qv '^{}$\|^null$'; then
+            npm test
+          else
+            echo "::notice::No npm test script is configured yet."
+          fi
+
+      - name: Run build
+        run: npm run build
