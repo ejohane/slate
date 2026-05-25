@@ -5,49 +5,55 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      pr_title:
+        description: Conventional Commit title to use for the release bump
+        required: true
+        type: string
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
-  release:
-    name: Read release version
+  prepare:
+    name: Prepare release version
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release):') }}
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
+      bump: ${{ steps.release.outputs.bump }}
+      previous_version: ${{ steps.release.outputs.previous_version }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Read and validate package version
-        id: version
-        shell: bash
-        run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?(\+([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$ ]]; then
-            echo "::error::package.json version '$VERSION' is not valid SemVer."
-            exit 1
-          fi
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure release tag is new
+      - name: Prepare release commit and tag
+        id: release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.version.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PR_TITLE: ${{ inputs.pr_title }}
+        run: node .github/scripts/prepare-release.mjs
+
+      - name: Push release commit and tag
         run: |
-          if gh release view "$TAG_NAME" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
-            echo "::error::Release $TAG_NAME already exists. Bump package.json before publishing another release."
-            exit 1
-          fi
+          git push origin HEAD:main
+          git push origin "${{ steps.release.outputs.tag }}"
 
   build:
     name: Build macOS
     runs-on: macos-latest
-    needs: release
+    needs: prepare
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -55,6 +61,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -66,7 +74,19 @@ jobs:
         run: npm ci
 
       - name: Confirm release version
-        run: node -e "const pkg = require('./package.json'); if (pkg.version !== '${{ needs.release.outputs.version }}') process.exit(1);"
+        run: node -e "const pkg = require('./package.json'); if (pkg.version !== '${{ needs.prepare.outputs.version }}') process.exit(1);"
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        shell: bash
+        run: |
+          if npm pkg get scripts.test | grep -qv '^{}$\|^null$'; then
+            npm test
+          else
+            echo "::notice::No npm test script is configured yet."
+          fi
 
       - name: Build distributables
         run: npm run dist -- --publish never
@@ -86,12 +106,14 @@ jobs:
     name: Publish GitHub release
     runs-on: ubuntu-latest
     needs:
-      - release
+      - prepare
       - build
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
 
       - name: Download build files
         uses: actions/download-artifact@v4
@@ -102,10 +124,12 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ needs.release.outputs.version }}
-          TAG_NAME: ${{ needs.release.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
         run: |
           gh release create "$TAG_NAME" release-artifacts/* \
+            --target "$RELEASE_SHA" \
             --title "Slate $RELEASE_VERSION" \
             --notes "Automated desktop build from $GITHUB_SHA." \
             --latest
