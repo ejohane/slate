@@ -38,6 +38,15 @@ jobs:
         with:
           node-version: 24
 
+      - name: Verify signing and notarization secrets
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node .github/scripts/verify-macos-signing-secrets.mjs
+
       - name: Prepare release commit and tag
         id: release
         env:
