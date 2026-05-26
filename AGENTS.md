@@ -18,3 +18,9 @@ Version bump rules:
 - Any valid type with `!` creates a major release.
 - Other valid types, such as `docs:`, `ci:`, `chore:`, `refactor:`, `test:`,
   `style:`, `perf:`, `build:`, and `revert:`, create a patch release.
+
+## Releases
+
+Keep macOS releases signed and notarized. Do not restore ad-hoc signing
+(`identity: "-"`) for public builds. See `docs/releasing.md` for the required
+GitHub Actions secrets.
