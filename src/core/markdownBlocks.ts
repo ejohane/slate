@@ -138,6 +138,73 @@ export function replaceBlockAt(
   return blocks.map((block) => block.raw).join('\n')
 }
 
+export function removeBlockAt(markdown: string, blockIndex: number) {
+  const blocks = splitMarkdownBlocks(markdown)
+  if (blockIndex < 0 || blockIndex >= blocks.length) {
+    return { markdown, nextBlockIndex: blockIndex }
+  }
+
+  if (blocks.length === 1) {
+    return { markdown: '', nextBlockIndex: 0 }
+  }
+
+  blocks.splice(blockIndex, 1)
+
+  return {
+    markdown: blocks.map((block) => block.raw).join('\n'),
+    nextBlockIndex: Math.max(0, blockIndex - 1),
+  }
+}
+
+export function mergeBlockWithPrevious(markdown: string, blockIndex: number) {
+  const blocks = splitMarkdownBlocks(markdown)
+  if (blockIndex <= 0 || blockIndex >= blocks.length) {
+    return { changed: false, markdown, nextBlockIndex: blockIndex, caretOffset: 0 }
+  }
+
+  const previousIndex = blockIndex - 1
+  const previous = blocks[previousIndex]
+  const current = blocks[blockIndex]
+
+  if (previous.kind === 'blank') {
+    const blockBeforeBlank = blocks[previousIndex - 1]
+    blocks.splice(previousIndex, 1)
+
+    if (
+      blockBeforeBlank &&
+      blockBeforeBlank.kind !== 'blank' &&
+      current.kind !== 'blank'
+    ) {
+      return {
+        changed: true,
+        markdown: blocks.map((block) => block.raw).join('\n'),
+        nextBlockIndex: previousIndex - 1,
+        caretOffset: blockBeforeBlank.raw.length + 1,
+      }
+    }
+
+    return {
+      changed: true,
+      markdown: blocks.map((block) => block.raw).join('\n'),
+      nextBlockIndex: previousIndex,
+      caretOffset: 0,
+    }
+  }
+
+  const mergedRaw = `${previous.raw}${current.raw}`
+  blocks.splice(previousIndex, 2, {
+    raw: mergedRaw,
+    kind: inferBlockKind(mergedRaw),
+  })
+
+  return {
+    changed: true,
+    markdown: blocks.map((block) => block.raw).join('\n'),
+    nextBlockIndex: previousIndex,
+    caretOffset: previous.raw.length,
+  }
+}
+
 export function splitBlockAt(
   markdown: string,
   blockIndex: number,
