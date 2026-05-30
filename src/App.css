@@ -187,7 +187,7 @@ button:focus-visible,
   resize: none;
   color: var(--source-ink);
   background: var(--source-bg);
-  font: 15px/1.65 var(--mono);
+  font: 15px/1.65 var(--text);
   letter-spacing: 0;
   tab-size: 2;
 }
@@ -259,14 +259,14 @@ button:focus-visible,
   outline: none;
   background: transparent;
   color: var(--source-ink);
-  font: 15px/1.7 var(--mono);
+  font: 16.5px/1.72 var(--text);
   letter-spacing: 0;
   tab-size: 2;
 }
 
 .markdown-source-block.heading {
   color: var(--ink-strong);
-  font-family: var(--mono);
+  font-family: var(--text);
   font-weight: 700;
   line-height: 1.18;
 }
