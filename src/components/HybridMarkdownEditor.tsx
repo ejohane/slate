@@ -9,6 +9,7 @@ import {
 import { markdownPlugins } from '../core/editorPlugins'
 import {
   replaceBlockAt,
+  removeBlockAt,
   splitBlockAt,
   splitMarkdownBlocks,
   type MarkdownBlockKind,
@@ -53,6 +54,16 @@ export function HybridMarkdownEditor({
       skipNextBlurRef.current = true
       onChange(result.markdown)
       setActiveBlock({ index: result.nextBlockIndex, placement: 'start' })
+    },
+    [markdown, onChange],
+  )
+
+  const removeBlock = useCallback(
+    (index: number) => {
+      const result = removeBlockAt(markdown, index)
+      skipNextBlurRef.current = true
+      onChange(result.markdown)
+      setActiveBlock({ index: result.nextBlockIndex, placement: 'end' })
     },
     [markdown, onChange],
   )
@@ -116,6 +127,7 @@ export function HybridMarkdownEditor({
               onNavigatePrevious={(placement) =>
                 navigateRelative(index, -1, placement)
               }
+              onRemove={() => removeBlock(index)}
               onSplitAt={(offset) => splitBlock(index, offset)}
             />
           )
@@ -165,6 +177,7 @@ type MarkdownSourceBlockProps = {
   onDeactivate: () => void
   onNavigateNext: (placement: CaretPlacement) => void
   onNavigatePrevious: (placement: CaretPlacement) => void
+  onRemove: () => void
   onSplitAt: (offset: number) => void
 }
 
@@ -177,6 +190,7 @@ function MarkdownSourceBlock({
   onDeactivate,
   onNavigateNext,
   onNavigatePrevious,
+  onRemove,
   onSplitAt,
 }: MarkdownSourceBlockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -212,6 +226,20 @@ function MarkdownSourceBlock({
         if (event.key === 'Escape') {
           event.preventDefault()
           onDeactivate()
+          return
+        }
+
+        if (
+          event.key === 'Backspace' &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          event.currentTarget.value.length === 0 &&
+          event.currentTarget.selectionStart === 0 &&
+          event.currentTarget.selectionEnd === 0
+        ) {
+          event.preventDefault()
+          onRemove()
           return
         }
 

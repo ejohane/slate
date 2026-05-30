@@ -138,6 +138,24 @@ export function replaceBlockAt(
   return blocks.map((block) => block.raw).join('\n')
 }
 
+export function removeBlockAt(markdown: string, blockIndex: number) {
+  const blocks = splitMarkdownBlocks(markdown)
+  if (blockIndex < 0 || blockIndex >= blocks.length) {
+    return { markdown, nextBlockIndex: blockIndex }
+  }
+
+  if (blocks.length === 1) {
+    return { markdown: '', nextBlockIndex: 0 }
+  }
+
+  blocks.splice(blockIndex, 1)
+
+  return {
+    markdown: blocks.map((block) => block.raw).join('\n'),
+    nextBlockIndex: Math.max(0, blockIndex - 1),
+  }
+}
+
 export function splitBlockAt(
   markdown: string,
   blockIndex: number,
