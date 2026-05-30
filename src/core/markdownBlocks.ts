@@ -156,6 +156,41 @@ export function removeBlockAt(markdown: string, blockIndex: number) {
   }
 }
 
+export function mergeBlockWithPrevious(markdown: string, blockIndex: number) {
+  const blocks = splitMarkdownBlocks(markdown)
+  if (blockIndex <= 0 || blockIndex >= blocks.length) {
+    return { changed: false, markdown, nextBlockIndex: blockIndex, caretOffset: 0 }
+  }
+
+  const previousIndex = blockIndex - 1
+  const previous = blocks[previousIndex]
+  const current = blocks[blockIndex]
+
+  if (previous.kind === 'blank') {
+    blocks.splice(previousIndex, 1)
+
+    return {
+      changed: true,
+      markdown: blocks.map((block) => block.raw).join('\n'),
+      nextBlockIndex: previousIndex,
+      caretOffset: 0,
+    }
+  }
+
+  const mergedRaw = `${previous.raw}${current.raw}`
+  blocks.splice(previousIndex, 2, {
+    raw: mergedRaw,
+    kind: inferBlockKind(mergedRaw),
+  })
+
+  return {
+    changed: true,
+    markdown: blocks.map((block) => block.raw).join('\n'),
+    nextBlockIndex: previousIndex,
+    caretOffset: previous.raw.length,
+  }
+}
+
 export function splitBlockAt(
   markdown: string,
   blockIndex: number,

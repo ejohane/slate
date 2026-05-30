@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { markdownPlugins } from '../core/editorPlugins'
 import {
+  mergeBlockWithPrevious,
   replaceBlockAt,
   removeBlockAt,
   splitBlockAt,
@@ -21,7 +22,7 @@ type HybridMarkdownEditorProps = {
   onChange: (markdown: string) => void
 }
 
-type CaretPlacement = 'start' | 'end'
+type CaretPlacement = 'start' | 'end' | number
 type ActiveBlock = {
   index: number
   placement: CaretPlacement
@@ -64,6 +65,22 @@ export function HybridMarkdownEditor({
       skipNextBlurRef.current = true
       onChange(result.markdown)
       setActiveBlock({ index: result.nextBlockIndex, placement: 'end' })
+    },
+    [markdown, onChange],
+  )
+
+  const mergeWithPreviousBlock = useCallback(
+    (index: number) => {
+      const result = mergeBlockWithPrevious(markdown, index)
+      if (!result.changed) return false
+
+      skipNextBlurRef.current = true
+      onChange(result.markdown)
+      setActiveBlock({
+        index: result.nextBlockIndex,
+        placement: result.caretOffset,
+      })
+      return true
     },
     [markdown, onChange],
   )
@@ -127,6 +144,7 @@ export function HybridMarkdownEditor({
               onNavigatePrevious={(placement) =>
                 navigateRelative(index, -1, placement)
               }
+              onMergeWithPrevious={() => mergeWithPreviousBlock(index)}
               onRemove={() => removeBlock(index)}
               onSplitAt={(offset) => splitBlock(index, offset)}
             />
@@ -175,6 +193,7 @@ type MarkdownSourceBlockProps = {
   onBlur: () => void
   onChange: (raw: string) => void
   onDeactivate: () => void
+  onMergeWithPrevious: () => boolean
   onNavigateNext: (placement: CaretPlacement) => void
   onNavigatePrevious: (placement: CaretPlacement) => void
   onRemove: () => void
@@ -188,6 +207,7 @@ function MarkdownSourceBlock({
   onBlur,
   onChange,
   onDeactivate,
+  onMergeWithPrevious,
   onNavigateNext,
   onNavigatePrevious,
   onRemove,
@@ -208,7 +228,12 @@ function MarkdownSourceBlock({
     if (!textarea) return
 
     textarea.focus({ preventScroll: true })
-    const position = placement === 'start' ? 0 : textarea.value.length
+    const position =
+      typeof placement === 'number'
+        ? Math.min(Math.max(placement, 0), textarea.value.length)
+        : placement === 'start'
+          ? 0
+          : textarea.value.length
     textarea.setSelectionRange(position, position)
     textarea.scrollIntoView({ block: 'nearest' })
   }, [placement])
@@ -240,6 +265,20 @@ function MarkdownSourceBlock({
         ) {
           event.preventDefault()
           onRemove()
+          return
+        }
+
+        if (
+          event.key === 'Backspace' &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          event.currentTarget.selectionStart === 0 &&
+          event.currentTarget.selectionEnd === 0
+        ) {
+          if (onMergeWithPrevious()) {
+            event.preventDefault()
+          }
           return
         }
 
