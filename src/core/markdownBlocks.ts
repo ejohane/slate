@@ -167,7 +167,21 @@ export function mergeBlockWithPrevious(markdown: string, blockIndex: number) {
   const current = blocks[blockIndex]
 
   if (previous.kind === 'blank') {
+    const blockBeforeBlank = blocks[previousIndex - 1]
     blocks.splice(previousIndex, 1)
+
+    if (
+      blockBeforeBlank &&
+      blockBeforeBlank.kind !== 'blank' &&
+      current.kind !== 'blank'
+    ) {
+      return {
+        changed: true,
+        markdown: blocks.map((block) => block.raw).join('\n'),
+        nextBlockIndex: previousIndex - 1,
+        caretOffset: blockBeforeBlank.raw.length + 1,
+      }
+    }
 
     return {
       changed: true,

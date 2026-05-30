@@ -87,6 +87,7 @@ export function HybridMarkdownEditor({
 
   const activateBlock = useCallback(
     (index: number, placement: CaretPlacement = 'end') => {
+      skipNextBlurRef.current = true
       setActiveBlock({ index, placement })
     },
     [],
@@ -122,7 +123,16 @@ export function HybridMarkdownEditor({
       return
     }
 
-    setActiveBlock(null)
+    requestAnimationFrame(() => {
+      if (
+        document.activeElement instanceof HTMLTextAreaElement &&
+        document.activeElement.classList.contains('markdown-source-block')
+      ) {
+        return
+      }
+
+      setActiveBlock(null)
+    })
   }, [])
 
   return (
