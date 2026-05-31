@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -33,6 +34,9 @@ export function HybridMarkdownEditor({
   onChange,
 }: HybridMarkdownEditorProps) {
   const [activeBlock, setActiveBlock] = useState<ActiveBlock | null>(null)
+  const [isDocumentSourceActive, setIsDocumentSourceActive] = useState(false)
+  const editorRef = useRef<HTMLDivElement | null>(null)
+  const documentSourceRef = useRef<HTMLTextAreaElement | null>(null)
   const skipNextBlurRef = useRef(false)
   const blocks = useMemo(() => splitMarkdownBlocks(markdown), [markdown])
   const safeActiveBlock =
@@ -97,6 +101,12 @@ export function HybridMarkdownEditor({
     setActiveBlock(null)
   }, [])
 
+  const selectDocumentSource = useCallback(() => {
+    skipNextBlurRef.current = true
+    setActiveBlock(null)
+    setIsDocumentSourceActive(true)
+  }, [])
+
   const navigateRelative = useCallback(
     (fromIndex: number, direction: -1 | 1, placement: CaretPlacement) => {
       let nextIndex = fromIndex + direction
@@ -135,8 +145,83 @@ export function HybridMarkdownEditor({
     })
   }, [])
 
+  useLayoutEffect(() => {
+    if (!isDocumentSourceActive) return
+
+    const textarea = documentSourceRef.current
+    if (!textarea) return
+
+    const selectAll = () => {
+      textarea.focus({ preventScroll: true })
+      textarea.setSelectionRange(0, textarea.value.length)
+    }
+
+    selectAll()
+    const frameId = requestAnimationFrame(selectAll)
+    return () => cancelAnimationFrame(frameId)
+  }, [isDocumentSourceActive])
+
+  useEffect(() => {
+    if (isDocumentSourceActive) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (!event.metaKey && !event.ctrlKey) ||
+        event.altKey ||
+        event.key.toLowerCase() !== 'a'
+      ) {
+        return
+      }
+
+      const editor = editorRef.current
+      if (!editor) return
+
+      const activeElement = document.activeElement
+      const eventTarget = event.target
+      const isEditorTarget =
+        eventTarget instanceof Node && editor.contains(eventTarget)
+      const isEditorFocus =
+        activeElement === document.body ||
+        activeElement === document.documentElement ||
+        activeElement === editor ||
+        (activeElement instanceof Node && editor.contains(activeElement))
+
+      if (!isEditorTarget && !isEditorFocus) return
+
+      event.preventDefault()
+      selectDocumentSource()
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [isDocumentSourceActive, selectDocumentSource])
+
+  if (isDocumentSourceActive) {
+    return (
+      <textarea
+        ref={documentSourceRef}
+        className="source-editor"
+        value={markdown}
+        spellCheck="true"
+        onBlur={() => setIsDocumentSourceActive(false)}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setIsDocumentSourceActive(false)
+          }
+        }}
+        aria-label="Edit Markdown document"
+      />
+    )
+  }
+
   return (
-    <div className="hybrid-editor" aria-label="Markdown document">
+    <div
+      ref={editorRef}
+      className="hybrid-editor"
+      aria-label="Markdown document"
+    >
       {blocks.map((block, index) => {
         if (index === safeActiveBlock?.index) {
           return (
