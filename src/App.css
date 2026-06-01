@@ -895,6 +895,125 @@ button:focus-visible,
   text-align: left;
 }
 
+@media (max-width: 1100px) {
+  .format-toolbar {
+    top: 22px;
+    right: 18px;
+    height: 64px;
+    min-width: 246px;
+    grid-template-columns: 30px 30px 30px 1fr 38px 31px;
+    padding: 0 13px 0 22px;
+    border-radius: 32px;
+  }
+
+  .format-toolbar button {
+    width: 31px;
+    height: 38px;
+  }
+
+  .format-toolbar svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .format-toolbar-spacer {
+    width: 28px;
+  }
+
+  .hybrid-editor,
+  .full-preview {
+    width: calc(100vw - 132px);
+    margin: 0 66px;
+    padding: 104px 0 150px;
+  }
+
+  .source-editor {
+    padding: 104px 66px 150px;
+  }
+
+  .markdown-block-shell.heading::before {
+    top: 34px;
+    left: -38px;
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+  }
+
+  .markdown-block-shell.heading + .markdown-block-shell.paragraph {
+    margin-top: 8px;
+  }
+
+  .markdown-block-shell.list {
+    margin-top: 58px;
+    margin-bottom: 82px;
+  }
+
+  .markdown-block-shell.code {
+    margin-top: 64px;
+    margin-bottom: 58px;
+  }
+
+  .markdown-block-shell.code::before,
+  .markdown-block-shell.code::after {
+    width: 12px;
+    height: 16px;
+    border-width: 2px;
+  }
+
+  .markdown-block-shell.code::before {
+    top: 14px;
+    left: -38px;
+  }
+
+  .markdown-block-shell.code::after {
+    top: 20px;
+    left: -32px;
+  }
+
+  .markdown-source-block,
+  .markdown-list-editor,
+  .markdown-body {
+    font: 30px/1.5 var(--text);
+    font-weight: 520;
+  }
+
+  .markdown-source-block.heading,
+  .markdown-body h1 {
+    font-size: 58px;
+  }
+
+  .markdown-body h2 {
+    font-size: 48px;
+  }
+
+  .markdown-body ul,
+  .markdown-body ol,
+  .markdown-list-editor {
+    padding-left: 55px;
+  }
+
+  .markdown-body li + li,
+  .markdown-list-editor li + li {
+    margin-top: 9px;
+  }
+
+  .markdown-source-block.code {
+    margin: 64px 0 58px;
+    padding: 42px 28px 36px;
+    font: 28px/1.65 var(--mono);
+  }
+
+  .markdown-body pre {
+    min-height: 240px;
+    padding: 42px 28px 36px;
+  }
+
+  .markdown-body pre code {
+    font: 28px/1.65 var(--mono);
+    font-weight: 680;
+  }
+}
+
 @media (max-width: 680px) {
   .app-shell {
     grid-template-rows: minmax(0, 1fr) auto;
