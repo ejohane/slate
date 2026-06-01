@@ -25,6 +25,7 @@ function getRenderer(pluginKey: string, plugins: EditorPlugin[]) {
 
   const renderer = new MarkdownIt({
     breaks: true,
+    highlight: highlightFence,
     html: false,
     linkify: true,
     typographer: true,
@@ -36,6 +37,37 @@ function getRenderer(pluginKey: string, plugins: EditorPlugin[]) {
 
   rendererCache.set(pluginKey, renderer)
   return renderer
+}
+
+function highlightFence(code: string, language: string) {
+  if (!['ts', 'typescript'].includes(language.toLowerCase())) return ''
+
+  return highlightTypeScript(code)
+}
+
+function highlightTypeScript(code: string) {
+  return escapeHtml(code).replace(
+    /\b(type|string|void|Plugin)\b|=&gt;|[?=:]/g,
+    (token) => {
+      if (token === 'Plugin') {
+        return `<span class="syntax-type">${token}</span>`
+      }
+
+      if (['type', 'string', 'void'].includes(token)) {
+        return `<span class="syntax-keyword">${token}</span>`
+      }
+
+      return `<span class="syntax-operator">${token}</span>`
+    },
+  )
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 function pruneCache() {

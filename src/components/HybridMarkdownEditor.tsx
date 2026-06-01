@@ -224,6 +224,27 @@ export function HybridMarkdownEditor({
     >
       {blocks.map((block, index) => {
         if (index === safeActiveBlock?.index) {
+          if (block.kind === 'list') {
+            return (
+              <MarkdownListSourceBlock
+                key={`${index}-list-source`}
+                placement={safeActiveBlock.placement}
+                raw={block.raw}
+                onBlur={handleBlur}
+                onChange={(raw) => updateBlock(index, raw)}
+                onDeactivate={deactivateBlock}
+                onNavigateNext={(placement) =>
+                  navigateRelative(index, 1, placement)
+                }
+                onNavigatePrevious={(placement) =>
+                  navigateRelative(index, -1, placement)
+                }
+                onMergeWithPrevious={() => mergeWithPreviousBlock(index)}
+                onRemove={() => removeBlock(index)}
+              />
+            )
+          }
+
           return (
             <MarkdownSourceBlock
               key={`${index}-source`}
@@ -281,6 +302,110 @@ export function HybridMarkdownEditor({
   )
 }
 
+type MarkdownListSourceBlockProps = {
+  placement: CaretPlacement
+  raw: string
+  onBlur: () => void
+  onChange: (raw: string) => void
+  onDeactivate: () => void
+  onMergeWithPrevious: () => boolean
+  onNavigateNext: (placement: CaretPlacement) => void
+  onNavigatePrevious: (placement: CaretPlacement) => void
+  onRemove: () => void
+}
+
+function MarkdownListSourceBlock({
+  placement,
+  raw,
+  onBlur,
+  onChange,
+  onDeactivate,
+  onMergeWithPrevious,
+  onNavigateNext,
+  onNavigatePrevious,
+  onRemove,
+}: MarkdownListSourceBlockProps) {
+  const listRef = useRef<HTMLUListElement | null>(null)
+  const lastRenderedRawRef = useRef('')
+  const items = useMemo(() => parseListItems(raw), [raw])
+
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+
+    if (lastRenderedRawRef.current === raw) return
+
+    list.replaceChildren(
+      ...items.map((item) => {
+        const listItem = document.createElement('li')
+        listItem.textContent = item
+        return listItem
+      }),
+    )
+    lastRenderedRawRef.current = raw
+  }, [items, raw])
+
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+
+    list.focus({ preventScroll: true })
+    placeListCaret(list, placement)
+    list.scrollIntoView({ block: 'nearest' })
+  }, [placement])
+
+  return (
+    <div className="markdown-block-shell list editing">
+      <ul
+        ref={listRef}
+        className="markdown-list-editor"
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck="true"
+        onBlur={onBlur}
+        onInput={(event) => {
+          const nextItems = readListEditorItems(event.currentTarget)
+          const nextRaw = nextItems.map((item) => `- ${item}`).join('\n')
+          lastRenderedRawRef.current = nextRaw
+          onChange(nextRaw)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            onDeactivate()
+            return
+          }
+
+          if (event.key === 'Backspace' && isListEditorEmpty(event.currentTarget)) {
+            event.preventDefault()
+            onRemove()
+            return
+          }
+
+          if (event.key === 'Backspace' && isListCaretAtStart(event.currentTarget)) {
+            if (onMergeWithPrevious()) {
+              event.preventDefault()
+            }
+            return
+          }
+
+          if (event.key === 'ArrowUp' && isListCaretInFirstItem(event.currentTarget)) {
+            event.preventDefault()
+            onNavigatePrevious('end')
+            return
+          }
+
+          if (event.key === 'ArrowDown' && isListCaretInLastItem(event.currentTarget)) {
+            event.preventDefault()
+            onNavigateNext('start')
+          }
+        }}
+        aria-label="Edit Markdown list"
+      />
+    </div>
+  )
+}
+
 type MarkdownSourceBlockProps = {
   kind: MarkdownBlockKind
   placement: CaretPlacement
@@ -293,6 +418,104 @@ type MarkdownSourceBlockProps = {
   onNavigatePrevious: (placement: CaretPlacement) => void
   onRemove: () => void
   onSplitAt: (offset: number) => void
+}
+
+function parseListItems(raw: string) {
+  const items = raw
+    .split('\n')
+    .map((line) => line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ''))
+
+  return items.length > 0 ? items : ['']
+}
+
+function readListEditorItems(list: HTMLUListElement) {
+  const items = Array.from(list.querySelectorAll('li')).map((item) =>
+    (item.textContent ?? '').replace(/\u00a0/g, ' ').trimEnd(),
+  )
+
+  if (items.length > 0) return items
+
+  return [(list.textContent ?? '').replace(/\u00a0/g, ' ').trimEnd()]
+}
+
+function placeListCaret(list: HTMLUListElement, placement: CaretPlacement) {
+  const selection = window.getSelection()
+  if (!selection) return
+
+  const items = Array.from(list.querySelectorAll('li'))
+  const item =
+    placement === 'start' || typeof placement === 'number'
+      ? items[0]
+      : items[items.length - 1]
+  if (!item) return
+
+  const textNode = getEditableTextNode(item)
+  const offset =
+    typeof placement === 'number'
+      ? Math.min(Math.max(placement, 0), textNode.textContent?.length ?? 0)
+      : placement === 'start'
+        ? 0
+        : (textNode.textContent ?? '').length
+
+  const range = document.createRange()
+  range.setStart(textNode, offset)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+function getEditableTextNode(element: HTMLElement) {
+  if (element.firstChild instanceof Text) return element.firstChild
+
+  const textNode = document.createTextNode('')
+  element.append(textNode)
+  return textNode
+}
+
+function isListEditorEmpty(list: HTMLUListElement) {
+  return readListEditorItems(list).every((item) => item.length === 0)
+}
+
+function isListCaretAtStart(list: HTMLUListElement) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false
+  }
+
+  const range = selection.getRangeAt(0)
+  const firstItem = list.querySelector('li')
+  if (!firstItem || !firstItem.contains(range.startContainer)) return false
+
+  return getRangeOffsetInElement(firstItem, range) === 0
+}
+
+function isListCaretInFirstItem(list: HTMLUListElement) {
+  return isListCaretInBoundaryItem(list, 'first')
+}
+
+function isListCaretInLastItem(list: HTMLUListElement) {
+  return isListCaretInBoundaryItem(list, 'last')
+}
+
+function isListCaretInBoundaryItem(
+  list: HTMLUListElement,
+  boundary: 'first' | 'last',
+) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return false
+
+  const items = Array.from(list.querySelectorAll('li'))
+  const item = boundary === 'first' ? items[0] : items[items.length - 1]
+  if (!item) return false
+
+  return item.contains(selection.getRangeAt(0).startContainer)
+}
+
+function getRangeOffsetInElement(element: Element, range: Range) {
+  const prefixRange = document.createRange()
+  prefixRange.selectNodeContents(element)
+  prefixRange.setEnd(range.startContainer, range.startOffset)
+  return prefixRange.toString().length
 }
 
 function MarkdownSourceBlock({
@@ -474,12 +697,14 @@ const MarkdownRenderedBlock = memo(function MarkdownRenderedBlock({
   const rendered = useMemo(() => renderMarkdown(raw, markdownPlugins), [raw])
 
   return (
-    <article
-      className={`markdown-body markdown-rendered-block ${kind}`}
-      onClick={onActivate}
-      onFocus={onActivate}
-      tabIndex={0}
-      dangerouslySetInnerHTML={{ __html: rendered }}
-    />
+    <div className={`markdown-block-shell ${kind}`}>
+      <article
+        className={`markdown-body markdown-rendered-block ${kind}`}
+        onClick={onActivate}
+        onFocus={onActivate}
+        tabIndex={0}
+        dangerouslySetInnerHTML={{ __html: rendered }}
+      />
+    </div>
   )
 })

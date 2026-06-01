@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Bold,
   Download,
   ExternalLink,
   FileText,
   FolderOpen,
+  Info,
+  Italic,
   Monitor,
   Moon,
+  MoreVertical,
   PanelLeft,
   RefreshCw,
   RotateCw,
   Search,
   Sun,
+  Underline,
   X,
 } from 'lucide-react'
 import './App.css'
@@ -471,6 +476,24 @@ function App() {
   return (
     <main className="app-shell" data-nav-open={isNavOpen}>
       <div className="window-drag-region" aria-hidden="true" />
+      <div className="format-toolbar" aria-label="Formatting tools">
+        <button type="button" aria-label="Bold" title="Bold">
+          <Bold aria-hidden="true" size={28} strokeWidth={2.8} />
+        </button>
+        <button type="button" aria-label="Italic" title="Italic">
+          <Italic aria-hidden="true" size={28} strokeWidth={2.6} />
+        </button>
+        <button type="button" aria-label="Underline" title="Underline">
+          <Underline aria-hidden="true" size={28} strokeWidth={2.6} />
+        </button>
+        <span aria-hidden="true" className="format-toolbar-spacer" />
+        <button type="button" aria-label="Document info" title="Document info">
+          <Info aria-hidden="true" size={34} strokeWidth={2.1} />
+        </button>
+        <button type="button" aria-label="More options" title="More options">
+          <MoreVertical aria-hidden="true" size={34} strokeWidth={2.6} />
+        </button>
+      </div>
 
       <button
         type="button"

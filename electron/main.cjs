@@ -63,9 +63,9 @@ function createWindow(options = {}) {
     height: 760,
     minWidth: 640,
     minHeight: 480,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
+    backgroundColor: '#1b1c1e',
     show: false,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    titleBarStyle: process.platform === 'darwin' ? 'customButtonsOnHover' : 'default',
     trafficLightPosition: { x: 14, y: 14 },
     webPreferences: {
       contextIsolation: true,
@@ -378,10 +378,9 @@ ipcMain.handle('theme:set-source', (_event, themeSource) => {
   if (!['system', 'light', 'dark'].includes(themeSource)) return
 
   nativeTheme.themeSource = themeSource
-  const backgroundColor = nativeTheme.shouldUseDarkColors ? '#0b0b0b' : '#ffffff'
 
   for (const window of BrowserWindow.getAllWindows()) {
-    window.setBackgroundColor(backgroundColor)
+    window.setBackgroundColor('#1b1c1e')
   }
 })
 
