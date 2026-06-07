@@ -532,6 +532,7 @@ function MarkdownSourceBlock({
   onSplitAt,
 }: MarkdownSourceBlockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const headingLevelClass = getHeadingLevelClass(raw)
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current
@@ -559,7 +560,11 @@ function MarkdownSourceBlock({
   return (
     <textarea
       ref={textareaRef}
-      className={`markdown-source-block ${kind}`}
+      className={[
+        'markdown-source-block',
+        kind,
+        headingLevelClass,
+      ].filter(Boolean).join(' ')}
       value={raw}
       rows={1}
       spellCheck="true"
@@ -654,6 +659,14 @@ function MarkdownSourceBlock({
       aria-label="Edit Markdown block"
     />
   )
+}
+
+function getHeadingLevelClass(raw: string) {
+  const firstLine = raw.split('\n')[0] ?? ''
+  const match = firstLine.match(/^ {0,3}(#{1,6})(?:\s|$)/)
+  if (!match) return null
+
+  return `heading-level-${match[1].length}`
 }
 
 function isSelectionOnFirstLine(textarea: HTMLTextAreaElement) {
