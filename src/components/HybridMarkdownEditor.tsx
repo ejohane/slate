@@ -34,9 +34,7 @@ export function HybridMarkdownEditor({
   onChange,
 }: HybridMarkdownEditorProps) {
   const [activeBlock, setActiveBlock] = useState<ActiveBlock | null>(null)
-  const [isDocumentSourceActive, setIsDocumentSourceActive] = useState(false)
   const editorRef = useRef<HTMLDivElement | null>(null)
-  const documentSourceRef = useRef<HTMLTextAreaElement | null>(null)
   const skipNextBlurRef = useRef(false)
   const blocks = useMemo(() => splitMarkdownBlocks(markdown), [markdown])
   const safeActiveBlock =
@@ -101,10 +99,25 @@ export function HybridMarkdownEditor({
     setActiveBlock(null)
   }, [])
 
-  const selectDocumentSource = useCallback(() => {
+  const selectRenderedDocument = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
     skipNextBlurRef.current = true
     setActiveBlock(null)
-    setIsDocumentSourceActive(true)
+
+    requestAnimationFrame(() => {
+      const currentEditor = editorRef.current
+      if (!currentEditor) return
+
+      const selection = window.getSelection()
+      if (!selection) return
+
+      const range = document.createRange()
+      range.selectNodeContents(currentEditor)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    })
   }, [])
 
   const navigateRelative = useCallback(
@@ -145,25 +158,7 @@ export function HybridMarkdownEditor({
     })
   }, [])
 
-  useLayoutEffect(() => {
-    if (!isDocumentSourceActive) return
-
-    const textarea = documentSourceRef.current
-    if (!textarea) return
-
-    const selectAll = () => {
-      textarea.focus({ preventScroll: true })
-      textarea.setSelectionRange(0, textarea.value.length)
-    }
-
-    selectAll()
-    const frameId = requestAnimationFrame(selectAll)
-    return () => cancelAnimationFrame(frameId)
-  }, [isDocumentSourceActive])
-
   useEffect(() => {
-    if (isDocumentSourceActive) return
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         (!event.metaKey && !event.ctrlKey) ||
@@ -189,32 +184,38 @@ export function HybridMarkdownEditor({
       if (!isEditorTarget && !isEditorFocus) return
 
       event.preventDefault()
-      selectDocumentSource()
+      selectRenderedDocument()
     }
 
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [isDocumentSourceActive, selectDocumentSource])
+  }, [selectRenderedDocument])
 
-  if (isDocumentSourceActive) {
-    return (
-      <textarea
-        ref={documentSourceRef}
-        className="source-editor"
-        value={markdown}
-        spellCheck="true"
-        onBlur={() => setIsDocumentSourceActive(false)}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            setIsDocumentSourceActive(false)
-          }
-        }}
-        aria-label="Edit Markdown document"
-      />
-    )
-  }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Backspace' && event.key !== 'Delete') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (isEditableElement(document.activeElement)) return
+
+      const editor = editorRef.current
+      if (!editor || !hasNonCollapsedSelectionIn(editor)) return
+
+      const markdownRange = getSelectedMarkdownRange(editor, blocks, markdown)
+      if (!markdownRange || markdownRange.start === markdownRange.end) return
+
+      event.preventDefault()
+      skipNextBlurRef.current = true
+      setActiveBlock(null)
+
+      const nextMarkdown =
+        markdown.slice(0, markdownRange.start) + markdown.slice(markdownRange.end)
+      onChange(nextMarkdown)
+      window.getSelection()?.removeAllRanges()
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [blocks, markdown, onChange])
 
   return (
     <div
@@ -283,7 +284,10 @@ export function HybridMarkdownEditor({
               }`}
               tabIndex={isCollapsedSeparator ? -1 : undefined}
               aria-hidden={isCollapsedSeparator}
-              onClick={() => activateBlock(index)}
+              onClick={() => {
+                if (hasNonCollapsedSelectionIn(editorRef.current)) return
+                activateBlock(index)
+              }}
               aria-label="Blank line"
             />
           )
@@ -292,6 +296,7 @@ export function HybridMarkdownEditor({
         return (
           <MarkdownRenderedBlock
             key={`${index}-${block.kind}`}
+            index={index}
             kind={block.kind}
             raw={block.raw}
             onActivate={() => activateBlock(index)}
@@ -698,11 +703,234 @@ function shouldCollapseBlankSeparator(
   return nextIndex < blocks.length
 }
 
+function hasNonCollapsedSelectionIn(container: Element | null) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return false
+  }
+
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index)
+    if (
+      container?.contains(range.commonAncestorContainer) ||
+      container?.contains(range.startContainer) ||
+      container?.contains(range.endContainer)
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function getSelectedMarkdownRange(
+  editor: HTMLElement,
+  blocks: ReturnType<typeof splitMarkdownBlocks>,
+  markdown: string,
+) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return null
+  }
+
+  const range = selection.getRangeAt(0)
+  const blockStarts = getBlockStartOffsets(blocks)
+  const start = getMarkdownOffsetForSelectionPoint(
+    editor,
+    blocks,
+    blockStarts,
+    markdown,
+    range.startContainer,
+    range.startOffset,
+  )
+  const end = getMarkdownOffsetForSelectionPoint(
+    editor,
+    blocks,
+    blockStarts,
+    markdown,
+    range.endContainer,
+    range.endOffset,
+  )
+
+  if (start === null || end === null) return null
+
+  return {
+    start: Math.min(start, end),
+    end: Math.max(start, end),
+  }
+}
+
+function getMarkdownOffsetForSelectionPoint(
+  editor: HTMLElement,
+  blocks: ReturnType<typeof splitMarkdownBlocks>,
+  blockStarts: number[],
+  markdown: string,
+  container: Node,
+  offset: number,
+) {
+  if (container === editor) {
+    if (offset <= 0) return 0
+    if (offset >= editor.childNodes.length) return markdown.length
+
+    return blockStarts[Math.min(offset, blockStarts.length - 1)] ?? markdown.length
+  }
+
+  const element =
+    container instanceof Element ? container : container.parentElement
+  const blockShell = element?.closest<HTMLElement>('.markdown-block-shell')
+  if (!blockShell) return null
+
+  const blockIndex = Number(blockShell.dataset.blockIndex)
+  const block = blocks[blockIndex]
+  if (!block || !Number.isFinite(blockIndex)) return null
+
+  const renderedBlock = blockShell.querySelector<HTMLElement>(
+    '.markdown-rendered-block',
+  )
+  if (!renderedBlock) {
+    return blockStarts[blockIndex] ?? null
+  }
+
+  const renderedOffset = getRenderedTextOffset(renderedBlock, container, offset)
+  const rawOffset = renderedOffsetToRawOffset(block.raw, block.kind, renderedOffset)
+
+  return (blockStarts[blockIndex] ?? 0) + rawOffset
+}
+
+function getBlockStartOffsets(blocks: ReturnType<typeof splitMarkdownBlocks>) {
+  const starts: number[] = []
+  let offset = 0
+
+  for (const block of blocks) {
+    starts.push(offset)
+    offset += block.raw.length + 1
+  }
+
+  return starts
+}
+
+function getRenderedTextOffset(
+  renderedBlock: HTMLElement,
+  container: Node,
+  offset: number,
+) {
+  const range = document.createRange()
+  range.selectNodeContents(renderedBlock)
+
+  try {
+    range.setEnd(container, offset)
+  } catch {
+    return 0
+  }
+
+  return range.toString().length
+}
+
+function renderedOffsetToRawOffset(
+  raw: string,
+  kind: MarkdownBlockKind,
+  renderedOffset: number,
+) {
+  const mappings = getRenderedLineMappings(raw, kind)
+  if (mappings.length === 0) return 0
+
+  let remainingOffset = Math.max(0, renderedOffset)
+
+  for (let index = 0; index < mappings.length; index += 1) {
+    const mapping = mappings[index]
+
+    if (remainingOffset <= mapping.renderedText.length) {
+      return mapping.rawTextStart + remainingOffset
+    }
+
+    remainingOffset -= mapping.renderedText.length
+
+    if (index < mappings.length - 1) {
+      if (remainingOffset === 0) return mapping.rawTextEnd
+      remainingOffset -= 1
+    }
+  }
+
+  return raw.length
+}
+
+function getRenderedLineMappings(raw: string, kind: MarkdownBlockKind) {
+  const lines = raw.split('\n')
+  const lineStarts: number[] = []
+  let offset = 0
+
+  for (const line of lines) {
+    lineStarts.push(offset)
+    offset += line.length + 1
+  }
+
+  if (kind === 'code') {
+    const openingFence = lines[0]?.match(/^ {0,3}(```+|~~~+)/)?.[1]
+    const firstContentLine = openingFence ? 1 : 0
+    const lastContentLine =
+      openingFence && lines.at(-1)?.trimStart().startsWith(openingFence)
+        ? lines.length - 2
+        : lines.length - 1
+
+    return lines
+      .slice(firstContentLine, lastContentLine + 1)
+      .map((line, index) => {
+        const lineIndex = firstContentLine + index
+        const rawStart = lineStarts[lineIndex] ?? 0
+
+        return {
+          rawTextStart: rawStart,
+          rawTextEnd: rawStart + line.length,
+          renderedText: line,
+        }
+      })
+  }
+
+  return lines.map((line, index) => {
+    const rawStart = lineStarts[index] ?? 0
+    const textStart = rawStart + getRenderedLinePrefixLength(line, kind)
+
+    return {
+      rawTextStart: textStart,
+      rawTextEnd: rawStart + line.length,
+      renderedText: line.slice(textStart - rawStart),
+    }
+  })
+}
+
+function getRenderedLinePrefixLength(line: string, kind: MarkdownBlockKind) {
+  if (kind === 'heading') {
+    return line.match(/^ {0,3}#{1,6}\s+/)?.[0].length ?? 0
+  }
+
+  if (kind === 'list') {
+    return line.match(/^\s*(?:[-*+]|\d+[.)])\s+/)?.[0].length ?? 0
+  }
+
+  if (kind === 'blockquote') {
+    return line.match(/^ {0,3}>\s?/)?.[0].length ?? 0
+  }
+
+  return 0
+}
+
+function isEditableElement(element: Element | null) {
+  if (!element) return false
+
+  return (
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLInputElement ||
+    element.closest('[contenteditable="true"]') !== null
+  )
+}
+
 const MarkdownRenderedBlock = memo(function MarkdownRenderedBlock({
+  index,
   kind,
   raw,
   onActivate,
 }: {
+  index: number
   kind: MarkdownBlockKind
   raw: string
   onActivate: () => void
@@ -710,12 +938,14 @@ const MarkdownRenderedBlock = memo(function MarkdownRenderedBlock({
   const rendered = useMemo(() => renderMarkdown(raw, markdownPlugins), [raw])
 
   return (
-    <div className={`markdown-block-shell ${kind}`}>
+    <div className={`markdown-block-shell ${kind}`} data-block-index={index}>
       <article
         className={`markdown-body markdown-rendered-block ${kind}`}
-        onClick={onActivate}
-        onFocus={onActivate}
-        tabIndex={0}
+        onClick={(event) => {
+          const editor = event.currentTarget.closest('.hybrid-editor')
+          if (hasNonCollapsedSelectionIn(editor)) return
+          onActivate()
+        }}
         dangerouslySetInnerHTML={{ __html: rendered }}
       />
     </div>

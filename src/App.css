@@ -267,6 +267,8 @@ button:focus-visible,
   min-height: 100svh;
   padding-inline: 0;
   caret-color: var(--focus);
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .markdown-block-shell {
